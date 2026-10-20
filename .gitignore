@@ -1,0 +1,8 @@
+.env
+.env.cloud
+**/.env.local
+*.db
+web-workspace/node_modules/
+web-workspace/dist/
+**/__pycache__/
+.pytest_cache/
