@@ -25,7 +25,7 @@ def create_article(db: Session, title: str, body: str, language: str = "id",
                        customer_message_id="KM.EXPIRY_REQUIRED",
                        details=[{"field": "expires_at", "rule": "REQUIRED"}])
     aid = new_id("turn"); vid = new_id("turn")
-    exp = datetime.datetime.fromisoformat(expires_at)
+    exp = datetime.datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
     a = KnowledgeArticleRow(article_id=aid, tenant_id=tenant_id, title=title, summary=body[:200], language=language,
                             intents=intents or [], access_level=access, status="PUBLISHED",
                             current_version_id=vid, expires_at=exp)

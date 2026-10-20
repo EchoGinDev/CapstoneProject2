@@ -171,6 +171,7 @@ def run_turn(db: Session, conv_id: str, text: str, corr: str,
                     "handoff_status": handoff["state"], "reason": "KNOWLEDGE_GAP", "reply": reply}
         citations = KmSvc.cite(r["results"])
         draft = _compose_answer(cls, r["results"], tool_results)
+        draft = _llm_answer(draft, r["results"], tool_results, corr, conv_id)
     else:
         draft = _compose_action_answer(cls, tool_results, conv_id)
     # guardrail: groundedness + output policy + action-state (FR-ORC-006/009)
@@ -231,6 +232,36 @@ def _compose_answer(cls, results, tool_results) -> str:
     if tool_results:
         extra = " Data per " + str(tool_results[0].get("as_of", "")) + "."
     return f"{base}{extra} [Sumber: {r0.get('title')}]"
+
+def _llm_answer(fallback: str, results: list, tool_results: list, corr: str, conv_id: str) -> str:
+    """Opt-in F4 answer drafting (LLM_ANSWER_ENABLED=true and LLM_PROVIDER=gemini).
+
+    The model only rewrites an answer from retrieved sources; its output is validated
+    against the F4 schema and still passes the groundedness/output/action-state
+    guardrails. Any failure returns the deterministic draft unchanged.
+    """
+    import os
+    if os.getenv("LLM_ANSWER_ENABLED", "false").lower() != "true" or os.getenv("LLM_PROVIDER", "stub") != "gemini":
+        return fallback
+    from . import llm_provider as Llm
+    try:
+        sources = [{"source_id": str(r["article_id"]), "source_type": "KNOWLEDGE_CITATION",
+                    "text": (r.get("body") or r.get("title") or "")[:1500]} for r in results[:3]]
+        sources += [{"source_id": f"tool-{i}", "source_type": "TOOL_RESULT",
+                     "text": str(t)[:500]} for i, t in enumerate(tool_results)]
+        sources = [s for s in sources if s["text"].strip()]
+        if not sources:
+            return fallback
+        out = Llm.generate_validated(Llm.build_provider(), Llm.LLMFunction.F4, {"sources": sources},
+                                     timeout_ms=min(int(os.getenv("LLM_TIMEOUT_MS", "10000")), 20000))
+        title = results[0].get("title")
+        return f"{out.text.strip()} [Sumber: {title}]"
+    except Exception as exc:
+        code = getattr(getattr(exc, "code", None), "value", "UNKNOWN")
+        audit_svc.emit("TNT-TEST", corr, "SYSTEM", "orchestrator", "llm.fallback",
+                       "conversation", conv_id, "orchestrator", conversation_id=conv_id,
+                       after={"function": "F4", "error": str(code)})
+        return fallback
 
 def _compose_action_answer(cls, tool_results, conv_id) -> str:
     if cls["intent_code"] == "REQ_CARD_BLOCK":

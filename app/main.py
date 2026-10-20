@@ -118,7 +118,7 @@ async def evidence_request(case_id: str, body: dict, request: Request,
 @app.post("/v1/sla/calculate")
 async def sla_calculate(body: dict, request: Request, ctx=Depends(require_perm("sla.read"))):
     from datetime import datetime as dt
-    created = dt.fromisoformat(body["created_at"])
+    created = dt.fromisoformat(body["created_at"].replace("Z", "+00:00"))
     return SlaSvc.calculate(body["object_type"], body.get("category", "GENERAL"),
                             body.get("severity", "MEDIUM"), created, body.get("timezone", "Asia/Jakarta"))
 

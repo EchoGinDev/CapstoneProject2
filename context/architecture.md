@@ -63,3 +63,9 @@ Correlation middleware, audit service, masking utility, and audit-trail endpoint
 - Production customer access remains gated on a trusted issuer, customer provisioning, and an authoritative subject-to-customer/tenant mapping. Local development login does not resolve those production dependencies.
 - Decide provider/storage/vector/queue adapters only from TRD and approved deployment scope.
 - Reconcile schema creation at import with Alembic in a focused migration unit.
+
+### F4 answer-drafting wiring decision (2026-10-20)
+
+Decision (developer-approved in session; not a mentor/product/security approval): `orchestrator._llm_answer` is the single opt-in call site of the provider boundary, for **F4 only** and **INQUIRY turns only**. It runs only when `LLM_ANSWER_ENABLED=true` and `LLM_PROVIDER=gemini`; the default is off, so CI and deterministic behavior are unchanged. F1-F3 remain unwired. The model receives retrieved knowledge bodies (and tool results) as sources, output is validated by `generate_validated` (F4 schema, claim_map substring and source-id checks), then still passes `Grd.groundedness`, `output_policy`, and `action_state_check`. Any provider error, timeout, or invalid output audits `llm.fallback` (error code only) and returns the deterministic draft unchanged. The model cannot authorize, call tools, or change workflow state. `gemini_provider.py` sends F4 with `response_json_schema` because Pydantic `extra="forbid"` output in `response_schema` was rejected by the API (HTTP 400, observed live).
+
+Open items: data-processing approval for sending knowledge text to Gemini; the configured model is a *preview* model; observed latency varied 1-40 s and `LLM_TIMEOUT_MS` is capped at 20000 per request; the 20 s turn budget (`BUDGET_MS`) is not yet enforced against the LLM call.

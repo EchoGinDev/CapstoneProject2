@@ -51,7 +51,8 @@ def _f3_input(context=None):
     )
 
 
-def test_default_provider_is_fixture_stub_and_repeats_without_network():
+def test_default_provider_is_fixture_stub_and_repeats_without_network(monkeypatch):
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)  # a loaded .env may select gemini
     payload = F1Input(message="cek biaya", short_context="")
     fixture = {
         "intent_code": IntentCode.INFO_PRODUCT_POLICY.value,
@@ -68,7 +69,8 @@ def test_default_provider_is_fixture_stub_and_repeats_without_network():
     assert first.intent_code == IntentCode.INFO_PRODUCT_POLICY
 
 
-def test_stub_without_matching_fixture_fails_closed():
+def test_stub_without_matching_fixture_fails_closed(monkeypatch):
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)  # a loaded .env may select gemini
     with pytest.raises(ProviderError) as exc:
         generate_validated(build_provider(), LLMFunction.F1,
                            F1Input(message="unmatched", short_context=""))
@@ -259,7 +261,11 @@ def test_default_factory_stays_stub_even_when_key_exists_and_orchestrator_has_no
         build_provider("gemini")
     assert exc.value.code == ProviderErrorCode.CONFIGURATION
     source = Path("app/modules/orchestrator.py").read_text(encoding="utf-8")
-    assert "llm_provider" not in source
+    # Approved wiring (2026-10-20): exactly one opt-in call site, F4 only.
+    assert source.count("generate_validated(") == 1
+    assert "LLMFunction.F4" in source
+    assert not any(f"LLMFunction.{name}" in source for name in ("F1", "F2", "F3"))
+    assert 'getenv("LLM_ANSWER_ENABLED", "false")' in source
     tree = ast.parse(source)
     budget = next(node.value.elts[1] for node in ast.walk(tree)
                   if isinstance(node, ast.Assign)
@@ -268,5 +274,53 @@ def test_default_factory_stays_stub_even_when_key_exists_and_orchestrator_has_no
                                   for name in target.elts)
                           for target in node.targets))
     assert ast.literal_eval(budget) == 4
-    assert not any(isinstance(node, ast.Call) and "generate" in ast.unparse(node.func).lower()
-                   and "llm" in ast.unparse(node.func).lower() for node in ast.walk(tree))
+    assert sum(1 for node in ast.walk(tree)
+               if isinstance(node, ast.Call) and "generate" in ast.unparse(node.func).lower()
+               and "llm" in ast.unparse(node.func).lower()) == 1
+
+
+class _FakeF4Provider:
+    def __init__(self, result):
+        self.result = result
+
+    def generate(self, function, payload, *, timeout_ms=None):
+        if isinstance(self.result, Exception):
+            raise self.result
+        return self.result
+
+
+def _answer_env(monkeypatch, provider):
+    from app.modules import llm_provider as llm
+    from app.modules import orchestrator as orc
+    monkeypatch.setenv("LLM_ANSWER_ENABLED", "true")
+    monkeypatch.setenv("LLM_PROVIDER", "gemini")
+    monkeypatch.setattr(llm, "build_provider", lambda *a, **k: provider)
+    monkeypatch.setattr(orc.audit_svc, "emit", lambda *a, **k: None)
+    return orc
+
+
+_RESULTS = [{"article_id": "KB-1", "title": "Biaya Admin", "body": "Biaya admin bulanan adalah gratis."}]
+
+
+def test_llm_answer_is_off_by_default(monkeypatch):
+    from app.modules import orchestrator as orc
+    monkeypatch.delenv("LLM_ANSWER_ENABLED", raising=False)
+    monkeypatch.setenv("LLM_PROVIDER", "gemini")
+    assert orc._llm_answer("deterministik", _RESULTS, [], "COR-1", "CONV-1") == "deterministik"
+
+
+def test_llm_answer_uses_validated_f4_output(monkeypatch):
+    provider = _FakeF4Provider({"text": "Biaya admin bulanan gratis.",
+                                "claim_map": [{"claim": "Biaya admin bulanan gratis",
+                                               "source_ids": ["KB-1"]}]})
+    orc = _answer_env(monkeypatch, provider)
+    reply = orc._llm_answer("deterministik", _RESULTS, [], "COR-1", "CONV-1")
+    assert reply == "Biaya admin bulanan gratis. [Sumber: Biaya Admin]"
+
+
+def test_llm_answer_falls_back_on_provider_error_and_invalid_output(monkeypatch):
+    for result in (ProviderError(ProviderErrorCode.TIMEOUT),
+                   {"text": "x", "claim_map": [{"claim": "x", "source_ids": ["TIDAK-ADA"]}]},
+                   {"text": "", "claim_map": []}):
+        orc = _answer_env(monkeypatch, _FakeF4Provider(result))
+        assert orc._llm_answer("deterministik", _RESULTS, [], "COR-1", "CONV-1") == "deterministik"

@@ -1,4 +1,4 @@
-﻿# Progress Tracker
+# Progress Tracker
 
 ## Current phase
 
@@ -213,3 +213,10 @@ This update supersedes the earlier “Unit 04 specification prepared; implementa
 - **Not run in this session:** Enter/Shift+Enter, blank/repeated sends, authenticated history reload, error/retry/fallback/handoff behavior, keyboard focus, 1440 px/390 px browser rendering, dynamic contrast, and assistive technology. The developer-reported manual results elsewhere remain reported results, not Codex-verified results.
 - **Environment limitation:** `git status --short` failed because this active project path is not recognized as a Git repository; no clean/dirty status is asserted.
 - **Unit 05 status:** remains **IN PROGRESS; BLOCKED FOR CLOSURE**. Required final evidence is a safe authenticated browser run covering the chat journey and specified responsive/keyboard/dynamic states, plus reviewer confirmation/disposition of the contrast baseline and gate evidence. Do not mark COMPLETE/APPROVED on the basis of build/SPA GET/source checks.
+
+## Gemini F4 answer wiring (2026-10-20)
+
+- **Change:** opt-in F4 call site `orchestrator._llm_answer` (flag `LLM_ANSWER_ENABLED`, default false; `.env.example` updated; local `.env` set true). `gemini_provider.py`: F4 uses `response_json_schema` plus an F4 grounding instruction. Decision recorded in `context/architecture.md`. Developer-approved in session only; no mentor/product/security approval.
+- **Tests changed:** `tests/test_llm_provider.py` no-callsite guard now asserts exactly one F4-only call site, default off; added 3 behavior tests (off by default, validated F4 output, fallback on error/invalid output).
+- **Verified by commands run:** `tests/test_llm_provider.py` + `tests/test_gemini_provider.py` = 59 passed. Live Gemini (`gemini-3.1-flash-lite-preview`) through `_llm_answer`: 2 of 3 calls returned grounded answers (2.4-7.9 s); 1 call hit PROVIDER_ERROR and correctly fell back. An earlier live call showed HTTP 400 for `response_schema`, which led to the `response_json_schema` fix.
+- **Not verified:** full backend suite and end-to-end chat through the running API/UI (the full-suite run did not finish in this session; PostgreSQL/Docker was unavailable). Frontend not touched.

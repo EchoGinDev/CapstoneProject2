@@ -18,8 +18,8 @@ def create_case_db(db: Session, body, ctx: dict, corr: str, tenant: str = "TNT-T
     now = _now()
     needs_confirm = body.severity_proposed in (Severity.HIGH, Severity.CRITICAL) and ctx["actor_type"] == "AI_AGENT"
     sla = SlaSvc.calculate("CASE", body.category, body.severity_proposed, now)
-    fr_due = datetime.datetime.fromisoformat(sla["first_response_due_at"])
-    reso_due = datetime.datetime.fromisoformat(sla["resolution_due_at"])
+    fr_due = datetime.datetime.fromisoformat(sla["first_response_due_at"].replace("Z", "+00:00"))
+    reso_due = datetime.datetime.fromisoformat(sla["resolution_due_at"].replace("Z", "+00:00"))
     sla_id = new_id("sla")
     status = "LOGGED"
     c = CaseRow(case_id=cid, tenant_id=tenant, customer_id=body.customer_id,
@@ -65,8 +65,8 @@ def create_ticket_db(db: Session, body, ctx: dict, corr: str, tenant: str = "TNT
     db.add(t)
     db.add(SlaRecordRow(sla_id=sla_id, tenant_id=tenant, object_type="TICKET", object_id=tid,
                         sla_config_version=sla["sla_config_version"], started_at=now,
-                        first_response_due_at=datetime.datetime.fromisoformat(sla["first_response_due_at"]),
-                        resolution_due_at=datetime.datetime.fromisoformat(sla["resolution_due_at"]),
+                        first_response_due_at=datetime.datetime.fromisoformat(sla["first_response_due_at"].replace("Z", "+00:00")),
+                        resolution_due_at=datetime.datetime.fromisoformat(sla["resolution_due_at"].replace("Z", "+00:00")),
                         state="RUNNING"))
     db.add(CrmOutboxRow(outbox_id=new_id("turn"), object_type="TICKET", object_id=tid,
                         operation="CREATE", payload={"ticket_id": tid}, state="PENDING"))
