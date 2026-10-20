@@ -23,7 +23,12 @@ ACT_T, CLAR_FLOOR = 0.75, 0.45
 KEYWORDS = {
     # Include the exact supported seed-article topic as a phrase. A single
     # broad token ("biaya") otherwise stays in CLARIFY despite a clear query.
-    "INFO_PRODUCT_POLICY": ["biaya", "biaya transfer", "transfer internasional", "fee", "bunga", "syarat", "ketentuan", "policy", "tarif"],
+    "INFO_PRODUCT_POLICY": [
+        "biaya", "biaya transfer", "transfer internasional", "fee", "bunga", "syarat",
+        "ketentuan", "policy", "tarif", "pembayaran", "metode pembayaran", "jenis pembayaran",
+        "limit", "limit transaksi", "limit harian", "operasional", "jam operasional",
+        "jadwal operasional", "kantor cabang", "saldo minimum", "suku bunga", "deposito"
+    ],
     "INFO_ACCOUNT_BALANCE": ["saldo", "balance", "dana tersedia", "sisa uang"],
     "INFO_TRANSACTION_HISTORY": ["transaksi", "mutasi", "riwayat", "history", "transaction"],
     "INFO_CASE_STATUS": ["status", "tiket", "kasus", "referensi", "reference", "laporan saya"],

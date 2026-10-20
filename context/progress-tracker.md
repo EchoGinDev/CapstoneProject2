@@ -220,3 +220,21 @@ This update supersedes the earlier “Unit 04 specification prepared; implementa
 - **Tests changed:** `tests/test_llm_provider.py` no-callsite guard now asserts exactly one F4-only call site, default off; added 3 behavior tests (off by default, validated F4 output, fallback on error/invalid output).
 - **Verified by commands run:** `tests/test_llm_provider.py` + `tests/test_gemini_provider.py` = 59 passed. Live Gemini (`gemini-3.1-flash-lite-preview`) through `_llm_answer`: 2 of 3 calls returned grounded answers (2.4-7.9 s); 1 call hit PROVIDER_ERROR and correctly fell back. An earlier live call showed HTTP 400 for `response_schema`, which led to the `response_json_schema` fix.
 - **Not verified:** full backend suite and end-to-end chat through the running API/UI (the full-suite run did not finish in this session; PostgreSQL/Docker was unavailable). Frontend not touched.
+
+## Knowledge Base Expansion & Verification (2026-10-21)
+
+- **Change:** Expanded `seed_baseline` in `app/modules/knowledge.py` with idempotent title checks and banking customer knowledge articles:
+  - *Jenis dan metode pembayaran* (BI-FAST, Real-Time Online, VA, QRIS)
+  - *Limit transaksi harian* (BI-FAST Rp250jt, ATM Rp10jt, Debit Rp25jt)
+  - *Jam operasional layanan* (Digital 24h, Cabang Senin-Jumat 08:00-15:00 WIB)
+  - *Biaya administrasi dan saldo minimum* (Reguler Rp10rb, bebas biaya >Rp5jt, minimum Rp50rb)
+  - *Suku bunga tabungan dan deposito* (Tabungan 1.5%, Deposito 4.0%-4.5%)
+- **Intent Tuning:** Expanded `INFO_PRODUCT_POLICY` in `app/modules/intent.py` with banking topic keywords (`metode pembayaran`, `jenis pembayaran`, `limit`, `limit transaksi`, `jam operasional`, `kantor cabang`, `saldo minimum`, `suku bunga`, `deposito`) to reach confidence >= 0.75 (`ACT`).
+- **Test isolation:** In `tests/conftest.py`, ensured test runs keep `LLM_ANSWER_ENABLED=false` and `LLM_PROVIDER=stub` so automated test suites remain 100% deterministic and offline.
+- **Verification:**
+  - Live query verification with Gemini F4 answer drafting:
+    - *"jenis pembayaran apa saja yang diterima"* -> Grounded answer cited to *Jenis dan metode pembayaran*.
+    - *"berapa limit transaksi harian BI-FAST?"* -> Grounded answer cited to *Limit transaksi harian*.
+    - *"kapan jam operasional kantor cabang?"* -> Grounded answer cited to *Jam operasional layanan*.
+    - *"berapa suku bunga deposito?"* -> Grounded answer cited to *Suku bunga tabungan dan deposito*.
+  - Full automated backend test suite: **107 passed, 0 failed** in 234.66s.
